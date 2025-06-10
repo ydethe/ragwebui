@@ -44,8 +44,8 @@ class ChatDocFontend(object):
 
         return re.sub(r"\[(\d+)\]", replacer, text)
 
-    def rag_with_anchored_sources(self, query):
-        query_vector = self.encoder.encode(query).tolist()
+    def rag_with_anchored_sources(self, message, chat_history):
+        query_vector = self.encoder.encode(message).tolist()
 
         t0 = time.time()
         hits = self.qdrant.search(
@@ -89,7 +89,7 @@ class ChatDocFontend(object):
         Contexte :
         {context}
 
-        Question : {query}
+        Question : {message}
 
         Réponse (avec citations) :
         """
@@ -106,23 +106,27 @@ class ChatDocFontend(object):
         html_answer = markdown.markdown(response.output_text)
         answer = self.link_citations(html_answer)
 
-        full_output = f"""
-        <div style='font-family:Arial, sans-serif; line-height:1.5;'>{answer}</div>
-        <hr>
-        <h4>Sources utilisées :</h4>
-        {html_sources}
-        """
+        chat_history.append({"role": "user", "content": message})
+        chat_history.append({"role": "assistant", "content": answer})
 
-        return full_output
+        return "",chat_history,html_sources
 
     def start(self):
-        # --- Gradio Interface ---
-        iface = gr.Interface(
-            fn=self.rag_with_anchored_sources,
-            inputs=gr.Textbox(label="Votre question"),
-            outputs=gr.HTML(label="Réponse + sources"),
-            title="Johncloud - ChatDoc",
-            flagging_mode="never",
-        )
+        # iface = gr.Interface(
+        #     fn=self.rag_with_anchored_sources,
+        #     inputs=gr.Textbox(label="Votre question"),
+        #     outputs=gr.HTML(label="Réponse + sources"),
+        #     title="Johncloud - ChatDoc",
+        #     flagging_mode="never",
+        # )
+
+        with gr.Blocks() as iface:
+            msg = gr.Textbox()
+            chatbot = gr.Chatbot(type="messages")
+            sources=gr.HTML(label="Sources")
+            # clear = gr.ClearButton([msg, chatbot])
+
+            msg.submit(fn=self.rag_with_anchored_sources, inputs=[msg, chatbot], outputs=[msg, chatbot,sources])
 
         iface.launch(server_name="0.0.0.0")
+        
