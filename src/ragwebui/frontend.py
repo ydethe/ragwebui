@@ -109,7 +109,7 @@ class ChatDocFontend(object):
         chat_history.append({"role": "user", "content": message})
         chat_history.append({"role": "assistant", "content": answer})
 
-        return "",chat_history,html_sources
+        return "", chat_history, html_sources
 
     def start(self):
         # iface = gr.Interface(
@@ -123,10 +123,13 @@ class ChatDocFontend(object):
         with gr.Blocks() as iface:
             msg = gr.Textbox()
             chatbot = gr.Chatbot(type="messages")
-            sources=gr.HTML(label="Sources")
+            sources = gr.HTML(label="Sources")
             # clear = gr.ClearButton([msg, chatbot])
 
-            msg.submit(fn=self.rag_with_anchored_sources, inputs=[msg, chatbot], outputs=[msg, chatbot,sources])
+            msg.submit(
+                fn=self.rag_with_anchored_sources,
+                inputs=[msg, chatbot],
+                outputs=[msg, chatbot, sources],
+            )
 
         iface.launch(server_name="0.0.0.0")
-        
