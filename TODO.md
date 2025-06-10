@@ -1,0 +1,1 @@
+- [src/ragwebui/DocumentIndexer.py#L190](src/ragwebui/DocumentIndexer.py#L190): Implement folder and file renaming
