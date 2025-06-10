@@ -1,3 +1,3 @@
-# RAG Indexer
+# RAG Web UI
 
 Usage

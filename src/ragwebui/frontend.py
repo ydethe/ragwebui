@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 import time
 
+from qdrant_client import QdrantClient
 import markdown
 import gradio as gr
 from sentence_transformers import SentenceTransformer
@@ -10,7 +11,6 @@ from openai.types.responses import Response
 
 from . import logger
 from .config import config
-from .QdrantIndexer import QdrantIndexer
 
 
 class ChatDocFontend(object):
@@ -25,8 +25,13 @@ class ChatDocFontend(object):
         self.encoder = SentenceTransformer(
             config.EMBEDDING_MODEL, trust_remote_code=config.EMBEDDING_MODEL_TRUST_REMOTE_CODE
         )
-        vector_size = self.encoder.get_sentence_embedding_dimension()
-        self.qdrant = QdrantIndexer(vector_size=vector_size)
+        # vector_size = self.encoder.get_sentence_embedding_dimension()
+        self.qdrant = QdrantClient(
+            host=config.QDRANT_HOST,
+            port=config.QDRANT_PORT,
+            # api_key=config.QDRANT_API_KEY,
+            https=False,
+        )
 
     def link_citations(self, text):
         """
@@ -43,7 +48,11 @@ class ChatDocFontend(object):
         query_vector = self.encoder.encode(query).tolist()
 
         t0 = time.time()
-        hits = self.qdrant.search(query_vector=query_vector, limit=config.QDRANT_QUERY_LIMIT)
+        hits = self.qdrant.search(
+            collection_name=config.COLLECTION_NAME,
+            query_vector=query_vector,
+            limit=config.QDRANT_QUERY_LIMIT,
+        )
         elapsed = time.time() - t0
         logger.info(f"Vector search completed in {elapsed:.1f} s")
 

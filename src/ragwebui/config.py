@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,16 +11,11 @@ class Config(BaseSettings):
     QDRANT_PORT: int
     QDRANT_QUERY_LIMIT: int
     OPENAI_API_KEY: str
-    DOCS_PATH: Path
-    STATE_DB_PATH: Path
     COLLECTION_NAME: str
     DAV_ROOT: str
     EMBEDDING_MODEL: str
     EMBEDDING_MODEL_TRUST_REMOTE_CODE: bool
     OPEN_MODEL_PREF: str
-    CHUNK_SIZE: int
-    CHUNK_OVERLAP: int
-    OCR_LANG: str
     TORCH_NUM_THREADS: int
 
 

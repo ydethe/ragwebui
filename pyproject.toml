@@ -11,13 +11,12 @@ description = ""
 dependencies = [
     "gradio>=5.33.0",
     "markdown>=3.8",
-    "numpy>=2.2.6",
     "openai>=1.84.0",
-    "optimum[openvino]>=1.25.3",
     "pydantic-settings>=2.9.1",
     "python-json-logger>=3.3.0",
     "qdrant-client>=1.14.2",
     "sentence-transformers>=4.1.0",
+    "torch>=2.7.1",
 ]
 
 [project.urls]

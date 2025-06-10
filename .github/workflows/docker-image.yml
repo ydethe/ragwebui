@@ -45,7 +45,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ydethe/chatdoc
+          images: ydethe/ragwebui
 
       - name: Build and push Docker image
         id: push
