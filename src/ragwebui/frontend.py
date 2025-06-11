@@ -45,8 +45,11 @@ class ChatDocFontend(object):
 
         results = []
         for hit in hits:
-            ci_min = hit.payload["chunk_index"] - 1
-            ci_max = hit.payload["chunk_index"] + 1
+            ci_min = hit.payload["chunk_index"] - config.RAG_AUGMENTATION
+            ci_max = hit.payload["chunk_index"] + config.RAG_AUGMENTATION
+            if ci_min < 0:
+                ci_max = ci_max - ci_min
+                ci_min = 0
             recs, ids = self.qdrant.scroll(
                 collection_name=config.COLLECTION_NAME,
                 limit=config.QDRANT_QUERY_LIMIT,
