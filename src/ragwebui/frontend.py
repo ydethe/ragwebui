@@ -106,9 +106,10 @@ class ChatDocFontend(object):
         html_answer = markdown.markdown(response.output_text)
         answer = self.link_citations(html_answer)
 
-        chat_history.extend(
-            [{"role": "assistant", "content": answer}, {"role": "user", "content": message}]
-        )
+        chat_history = [
+            {"role": "assistant", "content": answer},
+            {"role": "user", "content": message},
+        ] + chat_history
 
         return "", chat_history, html_sources
 
