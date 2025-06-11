@@ -1,8 +1,9 @@
 from pathlib import Path
 import re
 import time
+from typing import List
 
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 import markdown
 import gradio as gr
 from sentence_transformers import SentenceTransformer
@@ -33,6 +34,56 @@ class ChatDocFontend(object):
             https=config.QDRANT_HTTPS,
         )
 
+    def search(self, query_vector) -> List[str]:
+        t0 = time.time()
+        hits = self.qdrant.query_points(
+            collection_name=config.COLLECTION_NAME,
+            query=query_vector,
+            limit=config.QDRANT_QUERY_LIMIT,
+            with_payload=True,
+        ).points
+
+        results = []
+        for hit in hits:
+            ci_min = hit.payload["chunk_index"] - 1
+            ci_max = hit.payload["chunk_index"] + 1
+            recs, ids = self.qdrant.scroll(
+                collection_name=config.COLLECTION_NAME,
+                limit=config.QDRANT_QUERY_LIMIT,
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="source",
+                            match=models.MatchValue(value=hit.payload["source"]),
+                        ),
+                        models.FieldCondition(
+                            key="chunk_index",
+                            range=models.Range(gte=ci_min, lte=ci_max),
+                        ),
+                    ]
+                ),
+            )
+
+            txt = ""
+            for ci in range(ci_min, ci_max + 1):
+                short_list = [r for r in recs if r.payload["chunk_index"] == ci]
+                if len(short_list) == 0:
+                    continue
+                r = short_list[0]
+                if len(txt) == 0:
+                    txt = r.payload["text"]
+                else:
+                    txt += r.payload["text"][config.CHUNK_OVERLAP :]
+
+            res = hit.payload.copy()
+            res["text"] = txt
+            results.append(res)
+
+        elapsed = time.time() - t0
+        logger.info(f"Vector search completed in {elapsed:.1f} s")
+
+        return results
+
     def link_citations(self, text):
         """
         Remplace [1], [2]... par des liens HTML cliquables vers les ancres correspondantes.
@@ -47,23 +98,15 @@ class ChatDocFontend(object):
     def rag_with_anchored_sources(self, message, chat_history):
         query_vector = self.encoder.encode(message).tolist()
 
-        t0 = time.time()
-        hits = self.qdrant.query_points(
-            collection_name=config.COLLECTION_NAME,
-            query=query_vector,
-            limit=config.QDRANT_QUERY_LIMIT,
-            with_payload=True,
-        ).points
-        elapsed = time.time() - t0
-        logger.info(f"Vector search completed in {elapsed:.1f} s")
+        results = self.search(query_vector)
 
         context_chunks = []
         sources_seen = {}
         html_sources = ""
 
-        for i, hit in enumerate(hits):
-            text = hit.payload.get("text", "")
-            source_file = Path(hit.payload.get("source", "source inconnue"))
+        for i, hit in enumerate(results):
+            text = hit.get("text", "")
+            source_file = Path(hit.get("source", "source inconnue"))
             source_name = source_file.parts[-1]
             num = len(sources_seen) + 1
 

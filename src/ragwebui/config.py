@@ -17,6 +17,8 @@ class Config(BaseSettings):
     DAV_ROOT: str
     EMBEDDING_MODEL: str
     EMBEDDING_MODEL_TRUST_REMOTE_CODE: bool
+    CHUNK_SIZE: int
+    CHUNK_OVERLAP: int
     OPEN_MODEL_PREF: str
     TORCH_NUM_THREADS: int
 
