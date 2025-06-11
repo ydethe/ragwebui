@@ -29,8 +29,8 @@ class ChatDocFontend(object):
         self.qdrant = QdrantClient(
             host=config.QDRANT_HOST,
             port=config.QDRANT_PORT,
-            # api_key=config.QDRANT_API_KEY,
-            https=False,
+            api_key=config.QDRANT_API_KEY,
+            https=config.QDRANT_HTTPS,
         )
 
     def link_citations(self, text):
@@ -48,11 +48,12 @@ class ChatDocFontend(object):
         query_vector = self.encoder.encode(message).tolist()
 
         t0 = time.time()
-        hits = self.qdrant.search(
+        hits = self.qdrant.query_points(
             collection_name=config.COLLECTION_NAME,
-            query_vector=query_vector,
+            query=query_vector,
             limit=config.QDRANT_QUERY_LIMIT,
-        )
+            with_payload=True,
+        ).points
         elapsed = time.time() - t0
         logger.info(f"Vector search completed in {elapsed:.1f} s")
 
