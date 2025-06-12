@@ -1,7 +1,6 @@
-from pathlib import Path
 import re
 import time
-from typing import List
+from typing import List, Tuple
 
 from qdrant_client import QdrantClient, models
 import markdown
@@ -12,6 +11,7 @@ from openai.types.responses import Response
 
 from . import logger
 from .config import config
+from .RAGResult import RAGResult
 
 
 class ChatDocFontend(object):
@@ -34,7 +34,7 @@ class ChatDocFontend(object):
             https=config.QDRANT_HTTPS,
         )
 
-    def search(self, query_vector) -> List[str]:
+    def search(self, query_vector) -> List[RAGResult]:
         t0 = time.time()
         hits = self.qdrant.query_points(
             collection_name=config.COLLECTION_NAME,
@@ -80,6 +80,12 @@ class ChatDocFontend(object):
 
             res = hit.payload.copy()
             res["text"] = txt
+            res = RAGResult(
+                source=hit.payload["source"],
+                chunk_index=hit.payload["chunk_index"],
+                ocr_used=hit.payload["ocr_used"],
+                text=txt,
+            )
             results.append(res)
 
         elapsed = time.time() - t0
@@ -87,16 +93,39 @@ class ChatDocFontend(object):
 
         return results
 
-    def link_citations(self, text):
+    def link_citations(self, results: List[RAGResult], html_answer: str) -> Tuple[str, str]:
         """
         Remplace [1], [2]... par des liens HTML cliquables vers les ancres correspondantes.
         """
+        found_num = []
+        pattern = re.compile(r"\[(\d+)\]")
+        for m in pattern.finditer(html_answer):
+            num = int(m.group(1))
+            found_num.append(num)
 
-        def replacer(match):
-            num = match.group(1)
-            return f'<a href="#src{num}" style="text-decoration:none;">[{num}]</a>'
+        answer: str = html_answer[:]
+        html_sources = ""
+        found_results = []
+        for num in found_num:
+            res = results[num - 1]
+            list_sources = [s.source for s in found_results]
+            if res.source in list_sources:
+                result_index = list_sources.index(res.source)
+                res = results[result_index]
+            else:
+                found_results.append(res)
 
-        return re.sub(r"\[(\d+)\]", replacer, text)
+            answer = answer.replace(
+                f"[{num}]", f'<a href="#src{num}" style="text-decoration:none;">[{num}]</a>'
+            )
+            html_sources += f"""
+                    <div id="src{num}" style='margin-top:20px; padding:10px; border:1px solid #ccc;'>
+                        <b>[{num}] {res.source}</b><br>
+                        <iframe src="{config.DAV_ROOT}/{res.source}" width="100%" height="300px"></iframe>
+                    </div>
+                    """
+
+        return answer, html_sources
 
     def rag_with_anchored_sources(self, message, chat_history):
         query_vector = self.encoder.encode(message).tolist()
@@ -104,46 +133,37 @@ class ChatDocFontend(object):
         results = self.search(query_vector)
 
         context_chunks = []
-        sources_seen = {}
-        html_sources = ""
 
         for i, hit in enumerate(results):
-            # TODO Fix sources citation
-            text = hit.get("text", "")
-            source_file = Path(hit.get("source", "source inconnue"))
-            source_name = source_file.parts[-1]
-            num = len(sources_seen) + 1
-
-            # if i==0:
-            #     print(num)
-            #     print(source_file)
-            #     print(text[:10])
-            context_chunks.append(f"[{num}][{source_file}] {text}")
-
-            # Si on n'a pas encore affiché ce fichier
-            if source_file not in sources_seen:
-                sources_seen[source_file] = num
-                if source_file.suffix in (".pdf", ".docx", ".xlsx", ".xlsm", ".md", ".txt"):
-                    html_sources += f"""
-                    <div id="src{num}" style='margin-top:20px; padding:10px; border:1px solid #ccc;'>
-                        <b>[{num}] {source_file}</b><br>
-                        <iframe src="{config.DAV_ROOT}/{source_name}" width="100%" height="300px"></iframe>
-                    </div>
-                    """
-                else:
-                    logger.warning(f"Source not handled '{source_file}'")
+            num = i + 1
+            context_chunks.append(f"[{num}]<{hit.source}>\n{hit.text}")
 
         context = "\n\n".join(context_chunks)
 
         prompt = f"""
-        Tu es un assistant intelligent. Voici des extraits de documents numérotés. Utilise-les pour répondre précisément à la question. Cite les extraits utilisés avec leur numéro, comme ceci : [1][/path/to/document].
+        ### Contraintes
+        - Utilisez uniquement les informations fournies dans la section Contexte, y compris le nom du document.
+        - N'utilisez pas de connaissances extérieures ou d'hypothèses.
+        - Citez la source de chaque information en utilisant le format [numero_du_fichier].
+        - Si la réponse ne figure pas dans le contexte, répondez : « La réponse n'est pas disponible dans les documents fournis. »
 
+        ### Étapes
+        1. Lisez attentivement le contexte.
+        2. Repérez à la fois dans le contexte et dans nom_du_fichier les éléments pertinents pour répondre à la question de l'utilisateur.
+        3. Formulez une réponse claire et concise uniquement à partir de ces éléments.
+        4. Intégrez les citations de sources directement dans la réponse avec le format [numero_du_fichier].
+
+        ### Tâche
+        Répondre à la question de l'utilisateur à l'aide du contenu fourni dans le contexte et du nom du fichier entre crochets.
+
+        ### Assemblage
         Contexte :
         {context}
 
-        Question : {message}
+        Question :
+        {message}
 
-        Réponse (avec citations) :
+        ### Réponse
         """
 
         t0 = time.time()
@@ -156,8 +176,7 @@ class ChatDocFontend(object):
         logger.info(f"LLM response got in {elapsed:.1f} s")
 
         html_answer = markdown.markdown(response.output_text)
-        # answer = self.link_citations(html_answer)
-        answer = html_answer
+        answer, html_sources = self.link_citations(results, html_answer)
 
         chat_history = [
             {"role": "assistant", "content": answer},
@@ -176,8 +195,9 @@ class ChatDocFontend(object):
         # )
 
         with gr.Blocks() as iface:
-            msg = gr.Textbox()
-            chatbot = gr.Chatbot(type="messages")
+            gr.Markdown("# Chatdoc")
+            msg = gr.Textbox(label="Question")
+            chatbot = gr.Chatbot(type="messages", label="Historique")
             sources = gr.HTML(label="Sources")
             # clear = gr.ClearButton([msg, chatbot])
 
@@ -187,4 +207,4 @@ class ChatDocFontend(object):
                 outputs=[msg, chatbot, sources],
             )
 
-        iface.launch(server_name="0.0.0.0")
+        iface.launch(server_name="0.0.0.0", pwa=True)
