@@ -108,12 +108,17 @@ class ChatDocFontend(object):
         html_sources = ""
 
         for i, hit in enumerate(results):
+            # TODO Fix sources citation
             text = hit.get("text", "")
             source_file = Path(hit.get("source", "source inconnue"))
             source_name = source_file.parts[-1]
             num = len(sources_seen) + 1
 
-            context_chunks.append(f"[{num}] {text}")
+            # if i==0:
+            #     print(num)
+            #     print(source_file)
+            #     print(text[:10])
+            context_chunks.append(f"[{num}][{source_file}] {text}")
 
             # Si on n'a pas encore affiché ce fichier
             if source_file not in sources_seen:
@@ -131,7 +136,7 @@ class ChatDocFontend(object):
         context = "\n\n".join(context_chunks)
 
         prompt = f"""
-        Tu es un assistant intelligent. Voici des extraits de documents numérotés. Utilise-les pour répondre précisément à la question. Cite les extraits utilisés avec leur numéro, comme ceci : [1].
+        Tu es un assistant intelligent. Voici des extraits de documents numérotés. Utilise-les pour répondre précisément à la question. Cite les extraits utilisés avec leur numéro, comme ceci : [1][/path/to/document].
 
         Contexte :
         {context}
@@ -151,7 +156,8 @@ class ChatDocFontend(object):
         logger.info(f"LLM response got in {elapsed:.1f} s")
 
         html_answer = markdown.markdown(response.output_text)
-        answer = self.link_citations(html_answer)
+        # answer = self.link_citations(html_answer)
+        answer = html_answer
 
         chat_history = [
             {"role": "assistant", "content": answer},
