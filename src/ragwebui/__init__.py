@@ -2,10 +2,6 @@
 
 .. include:: ../../README.md
 
-# CLI usage
-
-ragwebui comes with a CLI tool called ragwebui.
-
 # Testing
 
 ## Run the tests
@@ -26,10 +22,8 @@ To run tests, just run:
 
 import sys
 import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json
 
 from .config import config
 
@@ -42,7 +36,7 @@ logger.setLevel(config.LOGLEVEL.upper())
 logHandler = logging.StreamHandler(sys.stdout)
 
 # JSON formatter
-formatter = jsonlogger.JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+formatter = json.JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)

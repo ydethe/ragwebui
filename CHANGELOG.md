@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- Fixed RAG ([1506249](https://github.com/ydethe/ragwebui/commit/1506249439f66b27914255bb75e87f80d52264a1) by Yann de The).
 - Fixing citations ([a0e4da6](https://github.com/ydethe/ragwebui/commit/a0e4da64794eabaaee921bc56abd10527bd325d5) by Yann de The).
 
 <!-- insertion marker -->

@@ -18,5 +18,5 @@ class TestRAGWebUI(unittest.TestCase):
 if __name__ == "__main__":
     a = TestRAGWebUI()
 
-    a.test_main()
-    # a.test_request()
+    # a.test_main()
+    a.test_request()

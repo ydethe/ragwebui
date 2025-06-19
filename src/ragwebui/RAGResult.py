@@ -28,7 +28,8 @@ class RAGRequest:
         """
         Remplace [1], [2]... par des liens HTML cliquables vers les ancres correspondantes.
         """
-        html_answer = markdown.markdown(self.response.output_text)
+        html_answer = markdown.markdown(self.response.choices[0].message.content)
+        # html_answer = markdown.markdown(self.response.output_text)
 
         found_num = []
         pattern = re.compile(r"\[(\d+)\]")

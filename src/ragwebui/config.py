@@ -18,6 +18,7 @@ class Config(BaseSettings):
     CHUNK_SIZE: int
     CHUNK_OVERLAP: int
     OPEN_MODEL_PREF: str
+    OPEN_MODEL_TEMPERATURE: float
     RAG_AUGMENTATION: int
     TORCH_NUM_THREADS: int
 

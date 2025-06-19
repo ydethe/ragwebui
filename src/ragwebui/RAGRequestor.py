@@ -4,7 +4,6 @@ from typing import List
 from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
-from openai.types.responses import Response
 
 from . import logger
 from .config import config
@@ -97,6 +96,7 @@ class RAGRequestor(object):
         query_vector = self.encoder.encode(message).tolist()
 
         results = self.search(query_vector)
+        logger.info(f"{len(results)} vectors found")
 
         context_chunks = []
 
@@ -104,7 +104,7 @@ class RAGRequestor(object):
             num = i + 1
             context_chunks.append(f"[{num}]<{hit.source}>\n{hit.text}")
 
-        context = "\n\n".join(context_chunks)
+        retrieved_context = "\n\n".join(context_chunks)
 
         prompt = f"""
         ### Contraintes
@@ -124,7 +124,7 @@ class RAGRequestor(object):
 
         ### Assemblage
         Contexte :
-        {context}
+        {retrieved_context}
 
         Question :
         {message}
@@ -132,12 +132,48 @@ class RAGRequestor(object):
         ### Réponse
         """
 
+        logger.info(f"Prompt length: {len(prompt)}")
+
         t0 = time.time()
-        response: Response = self.openai.responses.create(
-            input=prompt,
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    """### Contraintes
+- Utilisez uniquement les informations fournies dans la section Contexte, y compris le nom du document.
+- N'utilisez pas de connaissances extérieures ou d'hypothèses.
+- Citez la source de chaque information en utilisant le format [numero_du_fichier].
+- Si la réponse ne figure pas dans le contexte, répondez : « La réponse n'est pas disponible dans les documents fournis. »
+
+### Étapes
+1. Lisez attentivement le contexte.
+2. Repérez à la fois dans le contexte et dans nom_du_fichier les éléments pertinents pour répondre à la question de l'utilisateur.
+3. Formulez une réponse claire et concise uniquement à partir de ces éléments.
+4. Intégrez les citations de sources directement dans la réponse avec le format [numero_du_fichier].
+
+### Tâche
+Répondre à la question de l'utilisateur à l'aide du contenu fourni dans le contexte et du nom du fichier entre crochets.
+
+### Assemblage
+Contexte :
+{retrieved_context}
+        """
+                ),
+            },
+            {"role": "user", "content": message},
+        ]
+
+        # Call OpenAI API
+        response = self.openai.chat.completions.create(
             model=config.OPEN_MODEL_PREF,
-            temperature=0.3,
+            messages=messages,
+            temperature=config.OPEN_MODEL_TEMPERATURE,
         )
+        # response: Response = self.openai.responses.create(
+        #     input=prompt,
+        #     model=config.OPEN_MODEL_PREF,
+        #     temperature=0.3,
+        # )
         elapsed = time.time() - t0
         logger.info(f"LLM response got in {elapsed:.1f} s")
 
