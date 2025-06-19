@@ -1,16 +1,14 @@
-import re
 import time
-from typing import List, Tuple
+from typing import List
 
 from qdrant_client import QdrantClient, models
-import markdown
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 from openai.types.responses import Response
 
 from . import logger
 from .config import config
-from .RAGResult import RAGResult
+from .RAGResult import RAGResult, RAGRequest
 
 
 class RAGRequestor(object):
@@ -57,6 +55,10 @@ class RAGRequestor(object):
                             match=models.MatchValue(value=hit.payload["source"]),
                         ),
                         models.FieldCondition(
+                            key="page",
+                            match=models.MatchValue(value=hit.payload["page"]),
+                        ),
+                        models.FieldCondition(
                             key="chunk_index",
                             range=models.Range(gte=ci_min, lte=ci_max),
                         ),
@@ -79,6 +81,7 @@ class RAGRequestor(object):
             res["text"] = txt
             res = RAGResult(
                 source=hit.payload["source"],
+                page=hit.payload["page"],
                 chunk_index=hit.payload["chunk_index"],
                 ocr_used=hit.payload["ocr_used"],
                 text=txt,
@@ -90,43 +93,7 @@ class RAGRequestor(object):
 
         return results
 
-    def link_citations(self, results: List[RAGResult], html_answer: str) -> Tuple[str, str]:
-        """
-        Remplace [1], [2]... par des liens HTML cliquables vers les ancres correspondantes.
-        """
-        found_num = []
-        pattern = re.compile(r"\[(\d+)\]")
-        for m in pattern.finditer(html_answer):
-            num = int(m.group(1))
-            found_num.append(num)
-
-        answer: str = html_answer[:]
-        html_sources = ""
-        found_results = []
-        for num in found_num:
-            res = results[num - 1]
-            list_sources = [s.source for s in found_results]
-            if res.source in list_sources:
-                result_index = list_sources.index(res.source)
-                res = results[result_index]
-            else:
-                found_results.append(res)
-
-            answer = answer.replace(
-                f"[{num}]", f'<a href="#src{num}" style="text-decoration:none;">[{num}]</a>'
-            )
-            html_sources += f"""
-                    <div id="src{num}" style='margin-top:20px; padding:10px; border:1px solid #ccc;'>
-                        <b>[{num}] {res.source}</b><br>
-                        <iframe src="{config.DAV_ROOT}/{res.source}" width="100%" height="300px"></iframe>
-                    </div>
-                    """
-
-        return answer, html_sources
-
-    def rag_with_anchored_sources(
-        self, message: str, chat_history: List[dict] = []
-    ) -> Tuple[str, List[str], str]:
+    def rag_with_anchored_sources(self, message: str) -> RAGRequest:
         query_vector = self.encoder.encode(message).tolist()
 
         results = self.search(query_vector)
@@ -174,12 +141,8 @@ class RAGRequestor(object):
         elapsed = time.time() - t0
         logger.info(f"LLM response got in {elapsed:.1f} s")
 
-        html_answer = markdown.markdown(response.output_text)
-        answer, html_sources = self.link_citations(results, html_answer)
+        rag_request = RAGRequest(
+            question=message, prompt=prompt, response=response, sources=results
+        )
 
-        chat_history = [
-            {"role": "assistant", "content": answer},
-            {"role": "user", "content": message},
-        ] + chat_history
-
-        return "", chat_history, html_sources
+        return rag_request
