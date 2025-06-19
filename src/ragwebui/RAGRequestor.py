@@ -124,7 +124,9 @@ class RAGRequestor(object):
 
         return answer, html_sources
 
-    def rag_with_anchored_sources(self, message, chat_history):
+    def rag_with_anchored_sources(
+        self, message: str, chat_history: List[dict] = []
+    ) -> Tuple[str, List[str], str]:
         query_vector = self.encoder.encode(message).tolist()
 
         results = self.search(query_vector)
